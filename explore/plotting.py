@@ -35,6 +35,8 @@ def main():
     pretty_matplotlib_config(24)
     for method in METHODS:
         df = pd.read_csv(base_dir / f'{method}.csv')
+        # if method == 'addqn':
+        #     import ipdb; ipdb.set_trace()
         df = df[df.environment_name == args.environment_name]
         df = df[df.frame < args.num_iterations*1e6]
 
