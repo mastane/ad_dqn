@@ -1,5 +1,9 @@
 """
-flags array?
+Merges csv from different methods into a single csv file
+(like it was in results in initial dqn_zoo repo)
+
+Usage sample:
+python explore/merge_csv.py --environments breakout pong --base addqn_50mln --directory logs
 """
 from argparse import ArgumentParser
 from pathlib import Path
@@ -23,10 +27,6 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    """
-    Usage sample:
-    python explore/merge_csv.py --environments breakout pong --base addqn_50mln --directory logs
-    """
     args = parse_args()
     base_dir = Path(args.directory)
     df = pd.DataFrame({
@@ -39,7 +39,7 @@ def main():
         df = pd.concat((df, method_df))
         print(len(df))
 
-    df.to_csv(base_dir / 'addqn.csv')
+    df.to_csv(base_dir / f'{args.base}.csv')
 
 
 

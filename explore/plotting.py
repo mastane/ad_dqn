@@ -1,3 +1,8 @@
+"""
+Plots graphics for different rl methods from csv result files
+Usage example
+python explore/plotting.py --environment_name 'pong' --num_iterations=50 --smoothing=3 --note="0.8"
+"""
 from pathlib import Path
 from argparse import ArgumentParser
 
@@ -7,6 +12,7 @@ import pandas as pd
 import matplotlib
 
 METHODS = ['dqn', 'double_q', 'qrdqn', 'addqn']
+
 
 def pretty_matplotlib_config(fontsize=15):
     matplotlib.rcParams['pdf.fonttype'] = 42
@@ -22,6 +28,7 @@ def parse_args():
     parser.add_argument('--result_directory', type=str, default='logs')
     parser.add_argument('--smoothing', type=int, default=0)
     parser.add_argument('--note', type=str, default='')
+    parser.add_argument('--pdf', default=False, action='store_true')
     args = parser.parse_args()
     return args
 
@@ -35,8 +42,6 @@ def main():
     pretty_matplotlib_config(24)
     for method in METHODS:
         df = pd.read_csv(base_dir / f'{method}.csv')
-        # if method == 'addqn':
-        #     import ipdb; ipdb.set_trace()
         df = df[df.environment_name == args.environment_name]
         df = df[df.frame < args.num_iterations*1e6]
 
@@ -58,8 +63,10 @@ def main():
     plt.title(args.environment_name.capitalize())
     plt.xlabel('Million frames')
     plt.ylabel('Game score on evaluation')
-    # plt.savefig(base_dir / f'{args.environment_name}.png', dpi=120)
-    plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
+    if args.pdf:
+        plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
+    else:
+        plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.png', dpi=120)
     plt.show()
 
 
