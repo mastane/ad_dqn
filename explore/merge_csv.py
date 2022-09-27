@@ -1,4 +1,8 @@
 """
+lvl 7
+Launch something
+"""
+"""
 Merges csv from different methods into a single csv file
 (like it was in results in initial dqn_zoo repo)
 
@@ -26,6 +30,7 @@ def parse_args():
     parser.add_argument('--directory', type=str, default='logs', help='Directory with files')
     return parser.parse_args()
 
+
 def main():
     args = parse_args()
     base_dir = Path(args.directory)
@@ -40,7 +45,6 @@ def main():
         print(len(df))
 
     df.to_csv(base_dir / f'{args.base}.csv')
-
 
 
 if __name__ == '__main__':

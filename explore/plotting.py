@@ -6,12 +6,19 @@ python explore/plotting.py --environment_name 'pong' --num_iterations=50 --smoot
 from pathlib import Path
 from argparse import ArgumentParser
 
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
 
 METHODS = ['dqn', 'double_q', 'qrdqn', 'addqn']
+
+names_map = {
+    'dqn': "DQN",
+    'double_q': 'Double DQN',
+    'qrdqn': 'QR DQN',
+    'addqn': 'SAD DQN',
+    'saddqn': 'SAD DQN'
+}
 
 
 def pretty_matplotlib_config(fontsize=15):
@@ -56,7 +63,7 @@ def main():
             min_score = min_score.rolling(args.smoothing).mean()
             max_score = max_score.rolling(args.smoothing).mean()
 
-        plt.plot(frames, mean_score, label=method)
+        plt.plot(frames, mean_score, label=names_map[method])
         plt.fill_between(frames, min_score, max_score, alpha=0.2)
 
     plt.legend()
