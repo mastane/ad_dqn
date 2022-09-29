@@ -79,8 +79,6 @@ flags.DEFINE_float('mixture_ratio', 0.8, '')
 
 def main(argv):
   """Trains MAD-DQN agent on Atari."""
-  #wandb.init(project='ad_dqn')
-
   del argv
   logging.info('MAD-DQN on Atari on %s.', jax.lib.xla_bridge.get_backend().platform)
   random_state = np.random.RandomState(FLAGS.seed)
@@ -258,8 +256,6 @@ def main(argv):
     writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
     state.iteration += 1
     checkpoint.save()
-
-
 
   writer.close()
 

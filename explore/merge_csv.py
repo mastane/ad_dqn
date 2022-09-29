@@ -32,8 +32,12 @@ def parse_args():
 
 
 def main():
+<<<<<<< Updated upstream
     args = parse_args()
     base_dir = Path(args.directory)
+=======
+    base_dir = Path('logs/0.8')
+>>>>>>> Stashed changes
     df = pd.DataFrame({
         attribute: [] for attribute in ATTRIBUTES
     })
