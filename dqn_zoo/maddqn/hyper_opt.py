@@ -1,7 +1,7 @@
 """
-Lvl 7
-replace some with print
+Lvl 1
 """
+from argparse import ArgumentParser
 import collections
 import itertools
 import sys
@@ -9,7 +9,7 @@ import typing
 
 from absl import app
 from absl import flags
-from absl import logging
+# from absl import logging
 import chex
 import dm_env
 import haiku as hk
@@ -27,56 +27,70 @@ from dqn_zoo import replay as replay_lib
 from dqn_zoo.maddqn import agent
 
 
-# Relevant flag values are expressed in terms of environment frames.
-FLAGS = flags.FLAGS
-flags.DEFINE_string('environment_name', 'pong', '')
-flags.DEFINE_integer('environment_height', 84, '')
-flags.DEFINE_integer('environment_width', 84, '')
-flags.DEFINE_integer('replay_capacity', int(1e6), '')
-flags.DEFINE_bool('compress_state', True, '')
-flags.DEFINE_float('min_replay_capacity_fraction', 0.05, '')
-flags.DEFINE_integer('batch_size', 32, '')
-flags.DEFINE_integer('max_frames_per_episode', 108000, '')  # 30 mins.
-flags.DEFINE_integer('num_action_repeats', 4, '')
-flags.DEFINE_integer('num_stacked_frames', 4, '')
-flags.DEFINE_float('exploration_epsilon_begin_value', 1., '')
-flags.DEFINE_float('exploration_epsilon_end_value', 0.1, '')
-flags.DEFINE_float('exploration_epsilon_decay_frame_fraction', 0.02, '')
-flags.DEFINE_float('eval_exploration_epsilon', 0.05, '')
-flags.DEFINE_integer('target_network_update_period', int(4e4), '')
-flags.DEFINE_float('grad_error_bound', 1. / 32, '')
-flags.DEFINE_float('learning_rate', 0.00005, '')
-flags.DEFINE_float('optimizer_epsilon', 0.01 / 32**2, '')
-flags.DEFINE_float('additional_discount', 0.99, '')
-flags.DEFINE_float('max_abs_reward', 1., '')
-flags.DEFINE_integer('seed', 1, '')  # GPU may introduce nondeterminism.
-flags.DEFINE_integer('num_iterations', 200, '')
-flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
-flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
-flags.DEFINE_integer('learn_period', 16, '')
-flags.DEFINE_string('results_csv_path', './results_lr_1_pong_200m.csv', '')
+def generic_parser():
+  parser = ArgumentParser()
+  parser.add_argument('--environment_name', type=str, default='pong')
+  parser.add_argument('--environment_height', type=int, default=84)
+  parser.add_argument('--environment_width', type=int, default=84)
+  parser.add_argument('--replay_capacity', type=int, default=int(1e6))
+  parser.add_argument('--compress_state', type=bool, default=True)
+  parser.add_argument('--min_replay_capacity_fraction', type=float, default=0.05)
+  parser.add_argument('--batch_size', type=int, default=32)
+  parser.add_argument('--max_frames_per_episode', type=int, default=108000)  # 30 mins.
+  parser.add_argument('--num_action_repeats', type=int, default=4)
+  parser.add_argument('--num_stacked_frames', type=int, default=4)
+  parser.add_argument('--exploration_epsilon_begin_value', type=float, default=1.)
+  parser.add_argument('--exploration_epsilon_end_value', type=float, default=0.1)
+  parser.add_argument('--exploration_epsilon_decay_frame_fraction', type=float, default=0.02)
+  parser.add_argument('--eval_exploration_epsilon', type=float, default=0.05)
+  parser.add_argument('--target_network_update_period', type=int, default=int(4e4))
+  parser.add_argument('--grad_error_bound', type=float, default=1./32)
+  parser.add_argument('--learning_rate', type=float, default=0.00005)
+  parser.add_argument('--optimizer_epsilon', type=float, default=0.01/32**2)
+  parser.add_argument('--additional_discount', type=float, default=0.99)
+  parser.add_argument('--max_abs_reward', type=float, default=1.)
+  parser.add_argument('--seed', type=int, default=1)  # GPU may introduce nondeterminism.
+  parser.add_argument('--num_iterations', type=int, default=200)
+  parser.add_argument('--num_train_frames', type=int, default=int(1e6))  # Per iteration.
+  parser.add_argument('--num_eval_frames', type=int, default=int(5e5))  # Per iteration.
+  parser.add_argument('--learn_period', type=int, default=16)
+  parser.add_argument('--results_csv_path', type=str, default='./results_lr_1_pong_200m.csv')
 
-flags.DEFINE_integer('num_avars', 51, '')
-flags.DEFINE_float('mixture_ratio', 0.8, '')
+  parser.add_argument('--num_avars', type=int, default=51)
+  parser.add_argument('--mixture_ratio', type=int, default=0.8)
+  parser.add_argument('--jax_platform_name', default='gpu')  # Default to GPU.
+  parser.add_argument('--jax_numpy_rank_promotion', default='raise')
+  return parser
+
+def parse_args():
+  parser = generic_parser()
+  parser.add_argument('--learning_rates')
+
+  return parser.parse_args()
 
 
-def main(argv):
+def main(args):
   """Trains MAD-DQN agent on Atari."""
-  del argv
-  logging.info('MAD-DQN on Atari on %s.', jax.lib.xla_bridge.get_backend().platform)
-  random_state = np.random.RandomState(FLAGS.seed)
+  print(args)
+  # benchmark_args(args)
+
+
+
+def benchmark_args(args):
+  print('MAD-DQN on Atari on ', jax.lib.xla_bridge.get_backend().platform)
+  random_state = np.random.RandomState(args.seed)
   rng_key = jax.random.PRNGKey(
       random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64))
 
-  if FLAGS.results_csv_path:
-    writer = parts.CsvWriter(FLAGS.results_csv_path)
+  if args.results_csv_path:
+    writer = parts.CsvWriter(args.results_csv_path)
   else:
     writer = parts.NullWriter()
 
   def environment_builder():
     """Creates Atari environment."""
     env = gym_atari.GymAtari(
-        FLAGS.environment_name, seed=random_state.randint(1, 2**32))
+        args.environment_name, seed=random_state.randint(1, 2**32))
     return gym_atari.RandomNoopsEnvironmentWrapper(
         env,
         min_noop_steps=1,
@@ -86,26 +100,28 @@ def main(argv):
 
   env = environment_builder()
 
-  logging.info('Environment: %s', FLAGS.environment_name)
-  logging.info('Action spec: %s', env.action_spec())
-  logging.info('Observation spec: %s', env.observation_spec())
+  print('Environment: ', args.environment_name)
+  print('Action spec: ', env.action_spec())
+  print('Observation spec: ', env.observation_spec())
   num_actions = env.action_spec().num_values
-  num_avars = FLAGS.num_avars
+  num_avars = args.num_avars
   avars = jnp.arange(0, num_avars) / float(num_avars)
   network_fn = networks.ad_atari_network(num_actions, avars)
   network = hk.transform(network_fn)
 
+
   def preprocessor_builder():
     return processors.atari(
-        additional_discount=FLAGS.additional_discount,
-        max_abs_reward=FLAGS.max_abs_reward,
-        resize_shape=(FLAGS.environment_height, FLAGS.environment_width),
-        num_action_repeats=FLAGS.num_action_repeats,
+        additional_discount=args.additional_discount,
+        max_abs_reward=args.max_abs_reward,
+        resize_shape=(args.environment_height, args.environment_width),
+        num_action_repeats=args.num_action_repeats,
         num_pooled_frames=2,
         zero_discount_on_life_loss=True,
-        num_stacked_frames=FLAGS.num_stacked_frames,
+        num_stacked_frames=args.num_stacked_frames,
         grayscaling=True,
     )
+
 
   # Create sample network input from sample preprocessor output.
   sample_processed_timestep = preprocessor_builder()(env.reset())
@@ -113,19 +129,18 @@ def main(argv):
                                           sample_processed_timestep)
   sample_network_input = sample_processed_timestep.observation
   chex.assert_shape(sample_network_input,
-                    (FLAGS.environment_height, FLAGS.environment_width,
-                     FLAGS.num_stacked_frames))
+                    (args.environment_height, args.environment_width,
+                     args.num_stacked_frames))
 
   exploration_epsilon_schedule = parts.LinearSchedule(
-      begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity *
-                  FLAGS.num_action_repeats),
-      decay_steps=int(FLAGS.exploration_epsilon_decay_frame_fraction *
-                      FLAGS.num_iterations * FLAGS.num_train_frames),
-      begin_value=FLAGS.exploration_epsilon_begin_value,
-      end_value=FLAGS.exploration_epsilon_end_value)
-  import ipdb; ipdb.set_trace()
+      begin_t=int(args.min_replay_capacity_fraction * args.replay_capacity *
+                  args.num_action_repeats),
+      decay_steps=int(args.exploration_epsilon_decay_frame_fraction *
+                      args.num_iterations * args.num_train_frames),
+      begin_value=args.exploration_epsilon_begin_value,
+      end_value=args.exploration_epsilon_end_value)
 
-  if FLAGS.compress_state:
+  if args.compress_state:
 
     def encoder(transition):
       return transition._replace(
@@ -148,13 +163,13 @@ def main(argv):
       s_t=None,
   )
 
-  replay = replay_lib.TransitionReplay(FLAGS.replay_capacity, replay_structure,
+  replay = replay_lib.TransitionReplay(args.replay_capacity, replay_structure,
                                        random_state, encoder, decoder)
 
   optimizer = optax.adam(
-      learning_rate=FLAGS.learning_rate,
+      learning_rate=args.learning_rate,
       #decay=0.95,
-      eps=FLAGS.optimizer_epsilon,
+      eps=args.optimizer_epsilon,
       #centered=True,
   )
 
@@ -168,19 +183,19 @@ def main(argv):
       optimizer=optimizer,
       transition_accumulator=replay_lib.TransitionAccumulator(),
       replay=replay,
-      batch_size=FLAGS.batch_size,
+      batch_size=args.batch_size,
       exploration_epsilon=exploration_epsilon_schedule,
-      min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
-      learn_period=FLAGS.learn_period,
-      target_network_update_period=FLAGS.target_network_update_period,
-      grad_error_bound=FLAGS.grad_error_bound,
+      min_replay_capacity_fraction=args.min_replay_capacity_fraction,
+      learn_period=args.learn_period,
+      target_network_update_period=args.target_network_update_period,
+      grad_error_bound=args.grad_error_bound,
       rng_key=train_rng_key,
-      mixture_ratio=FLAGS.mixture_ratio,
+      mixture_ratio=args.mixture_ratio,
   )
   eval_agent = parts.EpsilonGreedyActor(
       preprocessor=preprocessor_builder(),
       network=network,
-      exploration_epsilon=FLAGS.eval_exploration_epsilon,
+      exploration_epsilon=args.eval_exploration_epsilon,
       rng_key=eval_rng_key,
   )
 
@@ -196,33 +211,33 @@ def main(argv):
   if checkpoint.can_be_restored():
     checkpoint.restore()
 
-  while state.iteration <= FLAGS.num_iterations:
+  while state.iteration <= args.num_iterations:
     # New environment for each iteration to allow for determinism if preempted.
     env = environment_builder()
 
-    logging.info('Training iteration %d.', state.iteration)
-    train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
-    num_train_frames = 0 if state.iteration == 0 else FLAGS.num_train_frames
+    print('Training iteration ', state.iteration)
+    train_seq = parts.run_loop(train_agent, env, args.max_frames_per_episode)
+    num_train_frames = 0 if state.iteration == 0 else args.num_train_frames
     train_seq_truncated = itertools.islice(train_seq, num_train_frames)
     train_trackers = parts.make_default_trackers(train_agent)
     train_stats = parts.generate_statistics(train_trackers, train_seq_truncated)
     #wandb.watch(train_agent, log_freq=100)
 
 
-    logging.info('Evaluation iteration %d.', state.iteration)
+    print('Evaluation iteration ', state.iteration)
     eval_agent.network_params = train_agent.online_params
-    eval_seq = parts.run_loop(eval_agent, env, FLAGS.max_frames_per_episode)
-    eval_seq_truncated = itertools.islice(eval_seq, FLAGS.num_eval_frames)
+    eval_seq = parts.run_loop(eval_agent, env, args.max_frames_per_episode)
+    eval_seq_truncated = itertools.islice(eval_seq, args.num_eval_frames)
     eval_trackers = parts.make_default_trackers(eval_agent)
     eval_stats = parts.generate_statistics(eval_trackers, eval_seq_truncated)
 
     # Logging and checkpointing.
     human_normalized_score = atari_data.get_human_normalized_score(
-        FLAGS.environment_name, eval_stats['episode_return'])
+        args.environment_name, eval_stats['episode_return'])
     capped_human_normalized_score = np.amin([1., human_normalized_score])
     log_output = [
         ('iteration', state.iteration, '%3d'),
-        ('frame', state.iteration * FLAGS.num_train_frames, '%5d'),
+        ('frame', state.iteration * args.num_train_frames, '%5d'),
         ('eval_episode_return', eval_stats['episode_return'], '% 2.2f'),
         ('train_episode_return', train_stats['episode_return'], '% 2.2f'),
         ('eval_num_episodes', eval_stats['num_episodes'], '%3d'),
@@ -236,22 +251,14 @@ def main(argv):
         ('human_gap', 1. - capped_human_normalized_score, '%.3f'),
     ]
     log_output_str = ', '.join(('%s: ' + f) % (n, v) for n, v, f in log_output)
-    logging.info(log_output_str)
+    print(log_output_str)
     writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
     state.iteration += 1
     checkpoint.save()
 
   writer.close()
 
-# from argparse import ArgumentParser
-#
-# def parse_args():
-#     parser = ArgumentParser()
-#     parser
-#     return args
 
 if __name__ == '__main__':
-  config.update('jax_platform_name', 'gpu')  # Default to GPU.
-  config.update('jax_numpy_rank_promotion', 'raise')
-  config.config_with_absl()
-  app.run(main)
+  args = parse_args()
+  main(args)

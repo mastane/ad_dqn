@@ -10,14 +10,15 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
 
-METHODS = ['dqn', 'double_q', 'qrdqn', 'addqn']
+METHODS = ['dqn', 'double_q', 'qrdqn', 'maddqn']
 
 names_map = {
     'dqn': "DQN",
     'double_q': 'Double DQN',
     'qrdqn': 'QR DQN',
     'addqn': 'SAD DQN',
-    'saddqn': 'SAD DQN'
+    'saddqn': 'SAD DQN',
+    'maddqn': 'MAD DQN'
 }
 
 
@@ -69,7 +70,7 @@ def main():
     plt.legend()
     plt.title(args.environment_name.capitalize())
     plt.xlabel('Million frames')
-    plt.ylabel('Game score on evaluation')
+    plt.ylabel('Evaluation episode return')
     if args.pdf:
         plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
     else:
