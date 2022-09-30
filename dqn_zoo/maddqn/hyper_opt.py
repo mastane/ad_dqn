@@ -1,6 +1,5 @@
 """
-Lvl 1
-make it list
+Lvl 7:
 """
 from argparse import ArgumentParser
 import collections
@@ -8,11 +7,14 @@ import itertools
 import sys
 import typing
 import os
+from datetime import datetime
 
-import neptune.new as neptune
-from absl import app
-from absl import flags
+# import neptune.new as neptune
+# from absl import app
+# from absl import flags
 # from absl import logging
+
+
 import chex
 import dm_env
 import haiku as hk
@@ -81,23 +83,19 @@ def main(args):
     args.learning_rate = lr
     args.method = 'maddqn'
 
-    if 'NEPTUNE_TOKEN' in os.environ and 'NEPTUNE_PROJECT' in os.environ:
-      run = neptune.init(
-          project=os.environ['NEPTUNE_PROJECT'],
-          api_token=os.environ['NEPTUNE_TOKEN'],
-      )  # your credentials
-      NEPTUNE = True
+    if 'WANDB_PROJECT' in os.environ and 'WANDB_ENTITY' in os.environ:
+      import wandb as wandb_run
+      wandb_run.init(project=os.environ['WANDB_PROJECT'], entity=os.environ["WANDB_ENTITY"])
     else:
-      run = None
-      NEPTUNE = False
+      wandb_run = None
 
-    if NEPTUNE:
-      run["parameters"] = vars(args)
-    benchmark_args(args, neptune_run=run)
-
+    if wandb_run:
+      wandb_run.config.update(args)
+    benchmark_args(args, wandb_run=wandb_run)
 
 
-def benchmark_args(args, neptune_run):
+
+def benchmark_args(args, wandb_run):
   print('MAD-DQN on Atari on ', jax.lib.xla_bridge.get_backend().platform)
   random_state = np.random.RandomState(args.seed)
   rng_key = jax.random.PRNGKey(
@@ -236,16 +234,15 @@ def benchmark_args(args, neptune_run):
     # New environment for each iteration to allow for determinism if preempted.
     env = environment_builder()
 
-    print('Training iteration ', state.iteration)
+    print(datetime.now(), 'Training iteration ', state.iteration)
     train_seq = parts.run_loop(train_agent, env, args.max_frames_per_episode)
     num_train_frames = 0 if state.iteration == 0 else args.num_train_frames
     train_seq_truncated = itertools.islice(train_seq, num_train_frames)
     train_trackers = parts.make_default_trackers(train_agent)
     train_stats = parts.generate_statistics(train_trackers, train_seq_truncated)
-    #wandb.watch(train_agent, log_freq=100)
 
 
-    print('Evaluation iteration ', state.iteration)
+    print(datetime.now(), 'Evaluation iteration ', state.iteration)
     eval_agent.network_params = train_agent.online_params
     eval_seq = parts.run_loop(eval_agent, env, args.max_frames_per_episode)
     eval_seq_truncated = itertools.islice(eval_seq, args.num_eval_frames)
@@ -273,19 +270,20 @@ def benchmark_args(args, neptune_run):
     ]
     log_output_str = ', '.join(('%s: ' + f) % (n, v) for n, v, f in log_output)
 
-    if neptune_run:
-      for n, v, f in log_output:
-        neptune_run[n].log(v)
+    if wandb_run:
+      wandb_run.log({k: v for k, v, _ in log_output})
+      # for n, v, f in log_output:
+      #   neptune_run[n].log(v)
 
-    print(log_output_str)
+    print(datetime.now(), log_output_str)
     writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
     state.iteration += 1
     checkpoint.save()
 
-  if neptune_run:
-    neptune_run["eval/capped_normalized_final"] = capped_human_normalized_score
-    neptune_run['train/episode_return'] = train_stats['episode_return']
-    neptune_run.stop()
+  if wandb_run:
+    wandb_run.log({"eval/capped_normalized_final": capped_human_normalized_score})
+    wandb_run.log({'train/episode_return': train_stats['episode_return']})
+    wandb_run.finish()
 
   writer.close()
 
