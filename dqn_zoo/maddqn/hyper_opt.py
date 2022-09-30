@@ -1,12 +1,15 @@
 """
 Lvl 1
+make it list
 """
 from argparse import ArgumentParser
 import collections
 import itertools
 import sys
 import typing
+import os
 
+import neptune.new as neptune
 from absl import app
 from absl import flags
 # from absl import logging
@@ -54,7 +57,7 @@ def generic_parser():
   parser.add_argument('--num_train_frames', type=int, default=int(1e6))  # Per iteration.
   parser.add_argument('--num_eval_frames', type=int, default=int(5e5))  # Per iteration.
   parser.add_argument('--learn_period', type=int, default=16)
-  parser.add_argument('--results_csv_path', type=str, default='./results_lr_1_pong_200m.csv')
+  parser.add_argument('--results_csv_path', type=str, default=None)
 
   parser.add_argument('--num_avars', type=int, default=51)
   parser.add_argument('--mixture_ratio', type=int, default=0.8)
@@ -62,9 +65,10 @@ def generic_parser():
   parser.add_argument('--jax_numpy_rank_promotion', default='raise')
   return parser
 
+
 def parse_args():
   parser = generic_parser()
-  parser.add_argument('--learning_rates')
+  parser.add_argument('--learning_rates', nargs='+', type=float, required=True)
 
   return parser.parse_args()
 
@@ -72,11 +76,28 @@ def parse_args():
 def main(args):
   """Trains MAD-DQN agent on Atari."""
   print(args)
-  # benchmark_args(args)
+
+  for lr in args.learning_rates:
+    args.learning_rate = lr
+    args.method = 'maddqn'
+
+    if 'NEPTUNE_TOKEN' in os.environ and 'NEPTUNE_PROJECT' in os.environ:
+      run = neptune.init(
+          project=os.environ['NEPTUNE_PROJECT'],
+          api_token=os.environ['NEPTUNE_TOKEN'],
+      )  # your credentials
+      NEPTUNE = True
+    else:
+      run = None
+      NEPTUNE = False
+
+    if NEPTUNE:
+      run["parameters"] = vars(args)
+    benchmark_args(args, neptune_run=run)
 
 
 
-def benchmark_args(args):
+def benchmark_args(args, neptune_run):
   print('MAD-DQN on Atari on ', jax.lib.xla_bridge.get_backend().platform)
   random_state = np.random.RandomState(args.seed)
   rng_key = jax.random.PRNGKey(
@@ -251,10 +272,20 @@ def benchmark_args(args):
         ('human_gap', 1. - capped_human_normalized_score, '%.3f'),
     ]
     log_output_str = ', '.join(('%s: ' + f) % (n, v) for n, v, f in log_output)
+
+    if neptune_run:
+      for n, v, f in log_output:
+        neptune_run[n].log(v)
+
     print(log_output_str)
     writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
     state.iteration += 1
     checkpoint.save()
+
+  if neptune_run:
+    neptune_run["eval/capped_normalized_final"] = capped_human_normalized_score
+    neptune_run['train/episode_return'] = train_stats['episode_return']
+    neptune_run.stop()
 
   writer.close()
 
