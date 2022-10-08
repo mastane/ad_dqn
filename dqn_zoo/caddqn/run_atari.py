@@ -73,8 +73,9 @@ flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
 flags.DEFINE_integer('learn_period', 16, '')
 flags.DEFINE_string('results_csv_path', './results_lr_1_pong_200m.csv', '')
 
-flags.DEFINE_integer('num_avars', 51, '')
-flags.DEFINE_float('mixture_ratio', 0.8, '')
+flags.DEFINE_integer('num_avars', 4, '')
+flags.DEFINE_float('vmax', 10., '')
+flags.DEFINE_integer('num_atoms', 47, '')
 
 
 def main(argv):
@@ -111,7 +112,8 @@ def main(argv):
   num_actions = env.action_spec().num_values
   num_avars = FLAGS.num_avars
   avars = jnp.arange(0, num_avars) / float(num_avars)
-  network_fn = networks.cad_atari_network(num_actions, avars)
+  support = jnp.linspace(-FLAGS.vmax, FLAGS.vmax, FLAGS.num_atoms)
+  network_fn = networks.cad_atari_network(num_actions, avars, support)
   network = hk.transform(network_fn)
 
   def preprocessor_builder():
@@ -180,9 +182,12 @@ def main(argv):
 
   train_agent = agent.CadDqn(
       preprocessor=preprocessor_builder(),
-      sample_network_input=sample_network_input,
-      network=network,
+      sample_network_input_avar=sample_network_input_avar,
+      network_avar=network_avar,
+      sample_network_input_categ=sample_network_input_categ,
+      network_categ=network_categ,
       avars=avars,
+      support=support,
       optimizer=optimizer,
       transition_accumulator=replay_lib.TransitionAccumulator(),
       replay=replay,
@@ -193,7 +198,6 @@ def main(argv):
       target_network_update_period=FLAGS.target_network_update_period,
       grad_error_bound=FLAGS.grad_error_bound,
       rng_key=train_rng_key,
-      mixture_ratio=FLAGS.mixture_ratio,
   )
   eval_agent = parts.EpsilonGreedyActor(
       preprocessor=preprocessor_builder(),
