@@ -121,10 +121,8 @@ class CadDqn(parts.Agent):
   def __init__(
       self,
       preprocessor: processors.Processor,
-      sample_network_input_avar: jnp.ndarray,
-      network_avar: parts.Network,
-      sample_network_input_categ: jnp.ndarray,
-      network_categ: parts.Network,
+      sample_network_input: jnp.ndarray,
+      network: parts.Network,
       avars: jnp.ndarray,
       support: jnp.ndarray,
       optimizer: optax.GradientTransformation,

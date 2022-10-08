@@ -182,10 +182,8 @@ def main(argv):
 
   train_agent = agent.CadDqn(
       preprocessor=preprocessor_builder(),
-      sample_network_input_avar=sample_network_input_avar,
-      network_avar=network_avar,
-      sample_network_input_categ=sample_network_input_categ,
-      network_categ=network_categ,
+      sample_network_input=sample_network_input,
+      network=network,
       avars=avars,
       support=support,
       optimizer=optimizer,
