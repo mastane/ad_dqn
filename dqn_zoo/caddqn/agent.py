@@ -46,7 +46,6 @@ def cad_q_learning(
     dist_q_t_selector: Array,
     dist_q_t: Array,
     dist_q_target_tm1: Array,
-    mixture_ratio: Numeric,
     stop_target_gradients: bool = True,
 ) -> Numeric:
   """Implements Q-learning for avar-valued Q distributions.
@@ -70,11 +69,11 @@ def cad_q_learning(
     CAD-Q-learning temporal difference error.
   """
   chex.assert_rank([
-      dist_q_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, dist_q_target_tm1, mixture_ratio
-  ], [2, 0, 0, 0, 2, 2, 2, 0])
+      dist_q_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, dist_q_target_tm1
+  ], [2, 0, 0, 0, 2, 2, 2])
   chex.assert_type([
-      dist_q_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, dist_q_target_tm1, mixture_ratio
-  ], [float, int, float, float, float, float, float, float])
+      dist_q_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, dist_q_target_tm1
+  ], [float, int, float, float, float, float, float])
 
   # Only update the taken actions.
   dist_qa_tm1 = dist_q_tm1[:, a_tm1]
@@ -89,8 +88,8 @@ def cad_q_learning(
   target_tm1 = r_t + discount_t * jnp.mean(dist_qa_t)
   num_avars = dist_qa_tm1.shape[-1]
   # take argsort on atoms, then reorder atoms and probabilities
-  probas = ( (1.0 - mixture_ratio) / jnp.float32( num_avars ) ) * jnp.ones_like( dist_qa_target_tm1 , dtype='float32')
-  probas = jnp.append(probas, mixture_ratio)
+  probas = jnp.ones_like( dist_qa_target_tm1 , dtype='float32')
+  probas = jnp.append(probas, 0.618)
   atoms_target_tm1 = jnp.append(dist_qa_target_tm1, target_tm1)
   sigma = jnp.argsort( atoms_target_tm1 )
   atoms_target_tm1 = atoms_target_tm1[sigma]
@@ -117,14 +116,17 @@ def cad_q_learning(
 _batch_cad_q_learning = jax.vmap(cad_q_learning)
 
 class CadDqn(parts.Agent):
-  """Atomic Distributional Deep Q-Network agent."""
+  """Categorical Atomic Distributional Deep Q-Network agent."""
 
   def __init__(
       self,
       preprocessor: processors.Processor,
-      sample_network_input: jnp.ndarray,
-      network: parts.Network,
+      sample_network_input_avar: jnp.ndarray,
+      network_avar: parts.Network,
+      sample_network_input_categ: jnp.ndarray,
+      network_categ: parts.Network,
       avars: jnp.ndarray,
+      support: jnp.ndarray,
       optimizer: optax.GradientTransformation,
       transition_accumulator: Any,
       replay: replay_lib.TransitionReplay,
@@ -135,7 +137,6 @@ class CadDqn(parts.Agent):
       target_network_update_period: int,
       grad_error_bound: float,
       rng_key: parts.PRNGKey,
-      mixture_ratio: float,
   ):
     self._preprocessor = preprocessor
     self._replay = replay
@@ -158,13 +159,12 @@ class CadDqn(parts.Agent):
     self._frame_t = -1  # Current frame index.
     self._statistics = {'state_value': np.nan}
 
-    self._mixture_ratio = mixture_ratio
 
     # Define jitted loss, update, and policy functions here instead of as
     # class methods, to emphasize that these are meant to be pure functions
     # and should not access the agent object's state via `self`.
 
-    def loss_fn(online_params, target_params, transitions, rng_key, mixture_ratio):
+    def loss_fn(online_params, target_params, transitions, rng_key):
       """Calculates loss given network parameters and transitions."""
       # Compute Q value distributions.
       _, online_key, target_key = jax.random.split(rng_key, 3)
@@ -182,7 +182,6 @@ class CadDqn(parts.Agent):
           dist_q_target_t,  # No double Q-learning here.
           dist_q_target_t,
           dist_q_target_tm1,  # ADDED BY MASTANE: target dist for mixture update
-          mixture_ratio * jnp.ones_like(transitions.r_t, dtype='float32'),  # mixture update parameter
       )
       td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
                                      grad_error_bound)
@@ -192,11 +191,11 @@ class CadDqn(parts.Agent):
       chex.assert_shape(loss, (self._batch_size,))
       return jnp.mean(loss)
 
-    def update(rng_key, opt_state, online_params, target_params, transitions,mixture_ratio):
+    def update(rng_key, opt_state, online_params, target_params, transitions):
       """Computes learning update from batch of replay transitions."""
       rng_key, update_key = jax.random.split(rng_key)
       d_loss_d_params = jax.grad(loss_fn)(online_params, target_params,
-                                          transitions, update_key,mixture_ratio)
+                                          transitions, update_key)
       updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
       new_online_params = optax.apply_updates(online_params, updates)
       return rng_key, new_opt_state, new_online_params
@@ -267,8 +266,7 @@ class CadDqn(parts.Agent):
         self._opt_state,
         self._online_params,
         self._target_params,
-        transitions,
-        self._mixture_ratio
+        transitions
     )
 
   @property
