@@ -111,7 +111,7 @@ def main(argv):
   num_actions = env.action_spec().num_values
   num_avars = FLAGS.num_avars
   avars = jnp.arange(0, num_avars) / float(num_avars)
-  network_fn = networks.ad_atari_network(num_actions, avars)
+  network_fn = networks.cad_atari_network(num_actions, avars)
   network = hk.transform(network_fn)
 
   def preprocessor_builder():

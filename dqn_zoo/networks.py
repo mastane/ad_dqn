@@ -54,6 +54,12 @@ class ADNetworkOutputs(typing.NamedTuple):  # ADDED BY MASTANE
   q_dist: jnp.ndarray
 
 
+class CADNetworkOutputs(typing.NamedTuple):  # ADDED BY MASTANE
+  q_values: jnp.ndarray
+  q_dist: jnp.ndarray
+  q_logits: jnp.ndarray
+
+
 class C51NetworkOutputs(typing.NamedTuple):
   q_values: jnp.ndarray
   q_logits: jnp.ndarray
@@ -332,6 +338,38 @@ def ad_atari_network(num_actions: int, avars: jnp.ndarray) -> NetworkFn:
     return ADNetworkOutputs(q_dist=q_dist, q_values=q_values)
 
   return net_fn
+
+
+
+def cad_atari_network(num_actions: int, avars: jnp.ndarray, support: jnp.ndarray) -> NetworkFn:
+  """CAD-DQN network, expects `uint8` input."""
+
+  chex.assert_rank(avars, 1)
+  num_avars = len(avars)
+  chex.assert_rank(support, 1)
+  num_atoms = len(support)
+
+  def net_fn(inputs):
+    """Function representing CAD-DQN Q-network."""
+    network_avar = hk.Sequential([
+        dqn_torso(),
+        dqn_value_head(num_avars * num_actions),
+    ])
+    network_categ = hk.Sequential([
+        dqn_torso(),
+        dqn_value_head(num_atoms * num_actions),
+    ])
+    network_output_avar = network_avar(inputs)
+    network_output_categ = network_categ(inputs)
+    q_dist = jnp.reshape(network_output_avar, (-1, num_avars, num_actions))
+    q_logits = jnp.reshape(network_output_categ, (-1, num_actions, num_atoms))
+    q_values = jnp.mean(q_dist, axis=1)
+    q_values = jax.lax.stop_gradient(q_values)
+    return CADNetworkOutputs(q_dist=q_dist, q_values=q_values, q_logits=q_logits)
+
+  return net_fn
+
+
 
 
 def c51_atari_network(num_actions: int, support: jnp.ndarray) -> NetworkFn:
