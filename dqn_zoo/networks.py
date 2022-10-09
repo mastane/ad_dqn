@@ -341,11 +341,9 @@ def ad_atari_network(num_actions: int, avars: jnp.ndarray) -> NetworkFn:
 
 
 
-def cad_atari_network(num_actions: int, avars: jnp.ndarray, support: jnp.ndarray) -> NetworkFn:
+def cad_atari_network(num_actions: int, num_avars: int, support: jnp.ndarray) -> NetworkFn:
   """CAD-DQN network, expects `uint8` input."""
 
-  chex.assert_rank(avars, 1)
-  num_avars = len(avars)
   chex.assert_rank(support, 1)
   num_atoms = len(support)
 

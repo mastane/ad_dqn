@@ -123,7 +123,6 @@ class CadDqn(parts.Agent):
       preprocessor: processors.Processor,
       sample_network_input: jnp.ndarray,
       network: parts.Network,
-      avars: jnp.ndarray,
       support: jnp.ndarray,
       optimizer: optax.GradientTransformation,
       transition_accumulator: Any,

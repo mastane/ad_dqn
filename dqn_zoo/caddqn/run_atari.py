@@ -111,9 +111,8 @@ def main(argv):
   logging.info('Observation spec: %s', env.observation_spec())
   num_actions = env.action_spec().num_values
   num_avars = FLAGS.num_avars
-  avars = jnp.arange(0, num_avars) / float(num_avars)
   support = jnp.linspace(-FLAGS.vmax, FLAGS.vmax, FLAGS.num_atoms)
-  network_fn = networks.cad_atari_network(num_actions, avars, support)
+  network_fn = networks.cad_atari_network(num_actions, num_avars, support)
   network = hk.transform(network_fn)
 
   def preprocessor_builder():
@@ -184,7 +183,6 @@ def main(argv):
       preprocessor=preprocessor_builder(),
       sample_network_input=sample_network_input,
       network=network,
-      avars=avars,
       support=support,
       optimizer=optimizer,
       transition_accumulator=replay_lib.TransitionAccumulator(),
