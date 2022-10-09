@@ -148,12 +148,15 @@ def categorical_cross_entropy(
 
 def cad_q_learning(
     dist_q_tm1: Array,
+    q_atoms_tm1: Array,
+    q_logits_tm1: Array,
     a_tm1: Numeric,
     r_t: Numeric,
     discount_t: Numeric,
     dist_q_t_selector: Array,
     dist_q_t: Array,
-    dist_q_target_tm1: Array,
+    q_atoms_t: Array,
+    q_logits_t: Array,
     stop_target_gradients: bool = True,
 ) -> Numeric:
   """Implements Q-learning for avar-valued Q distributions.
@@ -177,15 +180,14 @@ def cad_q_learning(
     CAD-Q-learning temporal difference error.
   """
   chex.assert_rank([
-      dist_q_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, dist_q_target_tm1
-  ], [2, 0, 0, 0, 2, 2, 2])
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_t, q_logits_t
+  ], [2, 1, 2, 0, 0, 0, 2, 2, 1, 2])
   chex.assert_type([
-      dist_q_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, dist_q_target_tm1
-  ], [float, int, float, float, float, float, float])
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_t, q_logits_t
+  ], [float, float, float, int, float, float, float, float, float, float])
 
   # Only update the taken actions.
   dist_qa_tm1 = dist_q_tm1[:, a_tm1]
-  dist_qa_target_tm1 = dist_q_target_tm1[:, a_tm1]
 
   # Select target action according to greedy policy w.r.t. dist_q_t_selector.
   q_t_selector = jnp.mean(dist_q_t_selector, axis=0)
@@ -218,6 +220,18 @@ def cad_q_learning(
   # Compute target, do not backpropagate into it.
   dist_target = jax.lax.select(stop_target_gradients,
                                jax.lax.stop_gradient(dist_target), dist_target)
+
+
+
+  """
+  td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
+                                 grad_error_bound)
+  losses = rlax.l2_loss(td_errors)
+  losses = jnp.mean(losses, axis=-1)
+  """
+
+
+
 
   return dist_target - dist_qa_tm1
 
@@ -277,24 +291,25 @@ class CadDqn(parts.Agent):
                                  transitions.s_tm1).q_dist
       dist_q_target_t = network.apply(target_params, target_key,
                                       transitions.s_t).q_dist
-      dist_q_target_tm1 = network.apply(target_params, target_key,
-                                      transitions.s_tm1).q_dist
-      td_errors = _batch_cad_q_learning(
+      logits_q_tm1 = network.apply(online_params, online_key,
+                                   transitions.s_tm1).q_logits
+      logits_target_q_t = network.apply(target_params, target_key,
+                                        transitions.s_t).q_logits
+      losses = _batch_cad_q_learning(
           dist_q_tm1,
+          support,
+          logits_q_tm1,
           transitions.a_tm1,
           transitions.r_t,
           transitions.discount_t,
           dist_q_target_t,  # No double Q-learning here.
           dist_q_target_t,
-          dist_q_target_tm1,  # ADDED BY MASTANE: target dist for mixture update
+          support,
+          logits_target_q_t,
       )
-      td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
-                                     grad_error_bound)
-      losses = rlax.l2_loss(td_errors)
-      #chex.assert_shape(losses, (self._batch_size,))
-      loss = jnp.mean(losses, axis=-1)
-      chex.assert_shape(loss, (self._batch_size,))
-      return jnp.mean(loss)
+      chex.assert_shape(losses, (self._batch_size,))
+      loss = jnp.mean(losses)
+      return loss
 
     def update(rng_key, opt_state, online_params, target_params, transitions):
       """Computes learning update from batch of replay transitions."""
