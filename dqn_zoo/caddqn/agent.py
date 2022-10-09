@@ -195,7 +195,20 @@ def cad_q_learning(
   dist_qa_t = dist_q_t[:, a_t]
 
   # ADDED BY MASTANE
-  target_tm1 = r_t + discount_t * jnp.mean(dist_qa_t)
+  target_tm1 = r_t + discount_t * jnp.mean(dist_qa_t, keepdims=True)
+
+  # Project using the Cramer distance and maybe stop gradient flow to targets.
+  categ_target = categorical_l2_project(target_tm1, jnp.array([1.0]), q_atoms_tm1)
+  categ_target = jax.lax.select(stop_target_gradients, jax.lax.stop_gradient(categ_target),
+                          categ_target)
+
+  # Compute loss (i.e. temporal difference error).
+  logit_qa_tm1 = q_logits_tm1[a_tm1]
+  c_losses =  categorical_cross_entropy(
+      labels=categ_target, logits=logit_qa_tm1)
+
+
+
   num_avars = dist_qa_tm1.shape[-1]
   # take argsort on atoms, then reorder atoms and probabilities
   probas = jnp.ones_like( dist_qa_target_tm1 , dtype='float32')
@@ -231,9 +244,10 @@ def cad_q_learning(
   """
 
 
+  td_errors = dist_target - dist_qa_tm1
 
 
-  return dist_target - dist_qa_tm1
+  return c_losses + a_losses
 
 _batch_cad_q_learning = jax.vmap(cad_q_learning)
 
