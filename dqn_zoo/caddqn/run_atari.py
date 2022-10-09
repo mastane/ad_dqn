@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""An CAD-DQN agent training on Atari.
+"""A CAD-DQN agent training on Atari.
 
 From the paper xxxx
 xxxx
@@ -66,6 +66,7 @@ flags.DEFINE_float('learning_rate', 0.00005, '')
 flags.DEFINE_float('optimizer_epsilon', 0.01 / 32**2, '')
 flags.DEFINE_float('additional_discount', 0.99, '')
 flags.DEFINE_float('max_abs_reward', 1., '')
+flags.DEFINE_float('max_global_grad_norm', 10., '')
 flags.DEFINE_integer('seed', 1, '')  # GPU may introduce nondeterminism.
 flags.DEFINE_integer('num_iterations', 200, '')
 flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
@@ -176,6 +177,9 @@ def main(argv):
       eps=FLAGS.optimizer_epsilon,
       #centered=True,
   )
+  if FLAGS.max_global_grad_norm > 0:
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(FLAGS.max_global_grad_norm), optimizer)
 
   train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
