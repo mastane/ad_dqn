@@ -24,6 +24,7 @@ import distrax
 import dm_env
 import jax
 import jax.numpy as jnp
+from jax.tree_util import tree_map
 import numpy as np
 import optax
 import rlax
@@ -146,6 +147,79 @@ def categorical_cross_entropy(
 
 
 
+
+
+
+
+@jax.custom_gradient
+def clip_gradient(x, gradient_min: float, gradient_max: float):
+  """Identity but the gradient in the backward pass is clipped.
+
+  See "Human-level control through deep reinforcement learning" by Mnih et al,
+  (https://www.nature.com/articles/nature14236)
+
+  Note `grad(0.5 * clip_gradient(x)**2)` is equivalent to `grad(huber_loss(x))`.
+
+  Note: x cannot be properly annotated because pytype does not support recursive
+  types; we would otherwise use the chex.ArrayTree pytype annotation here. Most
+  often x will be a single array of arbitrary shape, but the implementation
+  supports pytrees.
+
+  Args:
+    x: a pytree of arbitrary shape.
+    gradient_min: min elementwise size of the gradient.
+    gradient_max: max elementwise size of the gradient.
+
+  Returns:
+    a vector of same shape of `x`.
+  """
+  chex.assert_type(x, float)
+
+  def _compute_gradient(g):
+    return (tree_map(lambda g: jnp.clip(g, gradient_min, gradient_max),
+                     g), 0., 0.)
+
+  return x, _compute_gradient
+
+
+
+
+
+
+
+
+
+
+def l2_loss(predictions: Array,
+            targets: Optional[Array] = None) -> Array:
+  """Caculates the L2 loss of predictions wrt targets.
+
+  If targets are not provided this function acts as an L2-regularizer for preds.
+
+  Note: the 0.5 term is standard in "Pattern Recognition and Machine Learning"
+  by Bishop, but not "The Elements of Statistical Learning" by Tibshirani.
+
+  Args:
+    predictions: a vector of arbitrary shape.
+    targets: a vector of shape compatible with predictions.
+
+  Returns:
+    a vector of same shape of `predictions`.
+  """
+  if targets is None:
+    targets = jnp.zeros_like(predictions)
+  chex.assert_type([predictions, targets], float)
+  return 0.5 * (predictions - targets)**2
+
+
+
+
+
+
+
+
+
+
 def cad_q_learning(
     dist_q_tm1: Array,
     q_atoms_tm1: Array,
@@ -155,8 +229,8 @@ def cad_q_learning(
     discount_t: Numeric,
     dist_q_t_selector: Array,
     dist_q_t: Array,
-    q_atoms_t: Array,
-    q_logits_t: Array,
+    q_atoms_target_tm1: Array,
+    q_logits_target_tm1: Array,
     stop_target_gradients: bool = True,
 ) -> Numeric:
   """Implements Q-learning for avar-valued Q distributions.
@@ -180,14 +254,15 @@ def cad_q_learning(
     CAD-Q-learning temporal difference error.
   """
   chex.assert_rank([
-      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_t, q_logits_t
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_target_tm1
   ], [2, 1, 2, 0, 0, 0, 2, 2, 1, 2])
   chex.assert_type([
-      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_t, q_logits_t
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_target_tm1
   ], [float, float, float, int, float, float, float, float, float, float])
 
   # Only update the taken actions.
   dist_qa_tm1 = dist_q_tm1[:, a_tm1]
+  qa_logits_target_tm1 = q_logits_target_tm1[:, a_tm1]
 
   # Select target action according to greedy policy w.r.t. dist_q_t_selector.
   q_t_selector = jnp.mean(dist_q_t_selector, axis=0)
@@ -211,12 +286,11 @@ def cad_q_learning(
 
   num_avars = dist_qa_tm1.shape[-1]
   # take argsort on atoms, then reorder atoms and probabilities
-  probas = jnp.ones_like( dist_qa_target_tm1 , dtype='float32')
-  probas = jnp.append(probas, 0.618)
-  atoms_target_tm1 = jnp.append(dist_qa_target_tm1, target_tm1)
-  sigma = jnp.argsort( atoms_target_tm1 )
-  atoms_target_tm1 = atoms_target_tm1[sigma]
-  probas = probas[sigma]
+  probas = jax.nn.softmax(qa_logits_target_tm1)
+  atoms_target_tm1 = q_atoms_target_tm1
+  #sigma = jnp.argsort( atoms_target_tm1 )  # categorical support already sorted
+  #atoms_target_tm1 = atoms_target_tm1[sigma]
+  #probas = probas[sigma]
   # avar intervals
   i_window = jnp.arange( 1, num_avars + 1 ) / jnp.float32( num_avars )  # avar integration segments
   j_right = jnp.cumsum(probas)  # cumulative probabilities of the N+1 atoms
@@ -234,17 +308,15 @@ def cad_q_learning(
   dist_target = jax.lax.select(stop_target_gradients,
                                jax.lax.stop_gradient(dist_target), dist_target)
 
-
+  td_errors = dist_target - dist_qa_tm1
+  td_errors = clip_gradient(td_errors, -grad_error_bound,
+                                 grad_error_bound)
+  a_losses = l2_loss(td_errors)
+  a_losses = jnp.mean(a_losses, axis=-1)
 
   """
-  td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
-                                 grad_error_bound)
-  losses = rlax.l2_loss(td_errors)
   losses = jnp.mean(losses, axis=-1)
   """
-
-
-  td_errors = dist_target - dist_qa_tm1
 
 
   return c_losses + a_losses
@@ -307,8 +379,8 @@ class CadDqn(parts.Agent):
                                       transitions.s_t).q_dist
       logits_q_tm1 = network.apply(online_params, online_key,
                                    transitions.s_tm1).q_logits
-      logits_target_q_t = network.apply(target_params, target_key,
-                                        transitions.s_t).q_logits
+      logits_target_q_tm1 = network.apply(target_params, target_key,
+                                        transitions.s_tm1).q_logits
       losses = _batch_cad_q_learning(
           dist_q_tm1,
           support,
@@ -319,7 +391,7 @@ class CadDqn(parts.Agent):
           dist_q_target_t,  # No double Q-learning here.
           dist_q_target_t,
           support,
-          logits_target_q_t,
+          logits_target_q_tm1,
       )
       chex.assert_shape(losses, (self._batch_size,))
       loss = jnp.mean(losses)
