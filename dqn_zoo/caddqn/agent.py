@@ -262,7 +262,8 @@ def cad_q_learning(
 
   # Only update the taken actions.
   dist_qa_tm1 = dist_q_tm1[:, a_tm1]
-  qa_logits_target_tm1 = q_logits_target_tm1[:, a_tm1]
+  #qa_logits_target_tm1 = q_logits_target_tm1[:, a_tm1]
+  qa_logits_target_tm1 = q_logits_tm1[:, a_tm1]  # use online net as target
 
   # Select target action according to greedy policy w.r.t. dist_q_t_selector.
   q_t_selector = jnp.mean(dist_q_t_selector, axis=0)
@@ -287,7 +288,8 @@ def cad_q_learning(
   num_avars = dist_qa_tm1.shape[-1]
   # take argsort on atoms, then reorder atoms and probabilities
   probas = jax.nn.softmax(qa_logits_target_tm1)
-  atoms_target_tm1 = q_atoms_target_tm1
+  #atoms_target_tm1 = q_atoms_target_tm1
+  atoms_target_tm1 = q_atoms_tm1  # use online net as target
   #sigma = jnp.argsort( atoms_target_tm1 )  # categorical support already sorted
   #atoms_target_tm1 = atoms_target_tm1[sigma]
   #probas = probas[sigma]
@@ -375,7 +377,9 @@ class CadDqn(parts.Agent):
       _, online_key, target_key = jax.random.split(rng_key, 3)
       dist_q_tm1 = network.apply(online_params, online_key,
                                  transitions.s_tm1).q_dist
-      dist_q_target_t = network.apply(target_params, target_key,
+      #dist_q_target_t = network.apply(target_params, target_key,
+      #                              transitions.s_t).q_dist
+      dist_q_target_t = network.apply(online_params, online_key,  # use online net as target
                                       transitions.s_t).q_dist
       logits_q_tm1 = network.apply(online_params, online_key,
                                    transitions.s_tm1).q_logits
