@@ -1,6 +1,3 @@
-"""
-Lvl 7:
-"""
 from argparse import ArgumentParser
 import collections
 import itertools

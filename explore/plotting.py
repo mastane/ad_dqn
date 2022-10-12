@@ -31,7 +31,7 @@ def pretty_matplotlib_config(fontsize=15):
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument('--num_iterations', type=int, default=200)
+    parser.add_argument('--num_iterations', type=int, default=50)
     parser.add_argument('--environment_name', type=str, default='alien')
     parser.add_argument('--result_directory', type=str, default='logs')
     parser.add_argument('--smoothing', type=int, default=0)
@@ -67,10 +67,21 @@ def main():
         plt.plot(frames, mean_score, label=names_map[method])
         plt.fill_between(frames, min_score, max_score, alpha=0.2)
 
+    # for name in breakout_0.5_0.1_25at.csv"
+    # for num in [25, 50]:
+    #     df = pd.read_csv(f'logs/breakout_0.5_0.0001_{num}at.csv')
+    #     grouped = df.groupby('frame')
+    #     mean_score = grouped['eval_episode_return'].mean()
+    #
+    #     if args.smoothing != 0:
+    #         mean_score = mean_score.rolling(args.smoothing).mean()
+    #     plt.plot(df.frame / 1e6, mean_score, label=f'maddqn_{num}at')
     plt.legend()
     plt.title(args.environment_name.capitalize())
     plt.xlabel('Million frames')
     plt.ylabel('Evaluation episode return')
+
+
     if args.pdf:
         plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
     else:
