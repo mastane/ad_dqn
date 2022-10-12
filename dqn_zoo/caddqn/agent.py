@@ -16,8 +16,8 @@
 
 # pylint: disable=g-bad-import-order
 
-from typing import Any, Callable, Mapping, Text
-
+from typing import Any, Callable, Mapping, Text, Optional
+import warnings
 from absl import logging
 import chex
 import distrax
@@ -231,6 +231,7 @@ def cad_q_learning(
     dist_q_t: Array,
     q_atoms_target_tm1: Array,
     q_logits_target_tm1: Array,
+    grad_error_bound: Numeric,
     stop_target_gradients: bool = True,
 ) -> Numeric:
   """Implements Q-learning for avar-valued Q distributions.
@@ -263,7 +264,7 @@ def cad_q_learning(
   # Only update the taken actions.
   dist_qa_tm1 = dist_q_tm1[:, a_tm1]
   #qa_logits_target_tm1 = q_logits_target_tm1[:, a_tm1]
-  qa_logits_target_tm1 = q_logits_tm1[:, a_tm1]  # use online net as target
+  qa_logits_target_tm1 = q_logits_tm1[a_tm1]  # use online net as target
 
   # Select target action according to greedy policy w.r.t. dist_q_t_selector.
   q_t_selector = jnp.mean(dist_q_t_selector, axis=0)
@@ -323,7 +324,7 @@ def cad_q_learning(
 
   return c_losses + a_losses
 
-_batch_cad_q_learning = jax.vmap(cad_q_learning)
+_batch_cad_q_learning = jax.vmap(cad_q_learning, in_axes=(0,None,0,0,0,0,0,0,None,0,None))
 
 class CadDqn(parts.Agent):
   """Categorical Atomic Distributional Deep Q-Network agent."""
@@ -349,6 +350,7 @@ class CadDqn(parts.Agent):
     self._replay = replay
     self._transition_accumulator = transition_accumulator
     self._batch_size = batch_size
+    self._grad_error_bound = grad_error_bound
     self._exploration_epsilon = exploration_epsilon
     self._min_replay_capacity = min_replay_capacity_fraction * replay.capacity
     self._learn_period = learn_period
@@ -396,6 +398,7 @@ class CadDqn(parts.Agent):
           dist_q_target_t,
           support,
           logits_target_q_tm1,
+          self._grad_error_bound
       )
       chex.assert_shape(losses, (self._batch_size,))
       loss = jnp.mean(losses)

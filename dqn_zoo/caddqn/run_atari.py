@@ -36,6 +36,7 @@ from jax.config import config
 import jax.numpy as jnp
 import numpy as np
 import optax
+sys.path.append('./')
 from dqn_zoo import atari_data
 from dqn_zoo import gym_atari
 from dqn_zoo import networks
@@ -72,7 +73,7 @@ flags.DEFINE_integer('num_iterations', 200, '')
 flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
 flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
 flags.DEFINE_integer('learn_period', 16, '')
-flags.DEFINE_string('results_csv_path', './results_lr_1_pong_200m.csv', '')
+flags.DEFINE_string('results_csv_path', '', '')
 
 flags.DEFINE_integer('num_avars', 4, '')
 flags.DEFINE_float('vmax', 10., '')
