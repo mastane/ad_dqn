@@ -1,12 +1,26 @@
+"""
+Plots graphics for different rl methods from csv result files
+Usage example
+python explore/plotting.py --environment_name 'pong' --num_iterations=50 --smoothing=3 --note="0.8"
+"""
 from pathlib import Path
 from argparse import ArgumentParser
 
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
 
-METHODS = ['dqn', 'double_q', 'qrdqn', 'addqn']
+METHODS = ['dqn', 'double_q', 'qrdqn', 'maddqn']
+
+names_map = {
+    'dqn': "DQN",
+    'double_q': 'Double DQN',
+    'qrdqn': 'QR DQN',
+    'addqn': 'SAD DQN',
+    'saddqn': 'SAD DQN',
+    'maddqn': 'MAD DQN'
+}
+
 
 def pretty_matplotlib_config(fontsize=15):
     matplotlib.rcParams['pdf.fonttype'] = 42
@@ -17,11 +31,12 @@ def pretty_matplotlib_config(fontsize=15):
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument('--num_iterations', type=int, default=200)
+    parser.add_argument('--num_iterations', type=int, default=50)
     parser.add_argument('--environment_name', type=str, default='alien')
     parser.add_argument('--result_directory', type=str, default='logs')
     parser.add_argument('--smoothing', type=int, default=0)
     parser.add_argument('--note', type=str, default='')
+    parser.add_argument('--pdf', default=False, action='store_true')
     args = parser.parse_args()
     return args
 
@@ -49,15 +64,28 @@ def main():
             min_score = min_score.rolling(args.smoothing).mean()
             max_score = max_score.rolling(args.smoothing).mean()
 
-        plt.plot(frames, mean_score, label=method)
+        plt.plot(frames, mean_score, label=names_map[method])
         plt.fill_between(frames, min_score, max_score, alpha=0.2)
 
+    # for name in breakout_0.5_0.1_25at.csv"
+    # for num in [25, 50]:
+    #     df = pd.read_csv(f'logs/breakout_0.5_0.0001_{num}at.csv')
+    #     grouped = df.groupby('frame')
+    #     mean_score = grouped['eval_episode_return'].mean()
+    #
+    #     if args.smoothing != 0:
+    #         mean_score = mean_score.rolling(args.smoothing).mean()
+    #     plt.plot(df.frame / 1e6, mean_score, label=f'maddqn_{num}at')
     plt.legend()
     plt.title(args.environment_name.capitalize())
     plt.xlabel('Million frames')
-    plt.ylabel('Game score on evaluation')
-    # plt.savefig(base_dir / f'{args.environment_name}.png', dpi=120)
-    plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
+    plt.ylabel('Evaluation episode return')
+
+
+    if args.pdf:
+        plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
+    else:
+        plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.png', dpi=120)
     plt.show()
 
 
