@@ -3,6 +3,10 @@ Plots graphics for different rl methods from csv result files
 Usage example
 python explore/plotting.py --environment_name 'pong' --num_iterations=50 --smoothing=3 --note="0.8"
 """
+"""
+Lvl 4:
+Put on provided axis
+"""
 from pathlib import Path
 from argparse import ArgumentParser
 
@@ -44,8 +48,7 @@ def parse_args():
 
 
 
-def single_plot(methods, base_dir, environment_name, num_iterations, smoothing):
-    pretty_matplotlib_config(24)
+def single_plot(axes, methods, base_dir, environment_name, num_iterations, smoothing):
     for method in methods:
         df = pd.read_csv(base_dir / f'{method}.csv')
         df = df[df.environment_name == environment_name]
@@ -62,13 +65,10 @@ def single_plot(methods, base_dir, environment_name, num_iterations, smoothing):
             min_score = min_score.rolling(smoothing).mean()
             max_score = max_score.rolling(smoothing).mean()
 
-        plt.plot(frames, mean_score, label=NAMES_MAP[method])
-        plt.fill_between(frames, min_score, max_score, alpha=0.2)
+        axes.plot(frames, mean_score, label=NAMES_MAP[method])
+        axes.fill_between(frames, min_score, max_score, alpha=0.2)
 
-    plt.legend()
-    plt.title(environment_name.capitalize())
-    plt.xlabel('Million frames')
-    plt.ylabel('Evaluation episode return')
+    axes.set_title(environment_name.capitalize())
 
 
 def main():
@@ -76,14 +76,14 @@ def main():
     print(args)
     base_directory = Path(args.base_directory)
 
-    plt.figure(figsize=(10, 8))
-    single_plot(METHODS, base_directory, args.environment_name, args.num_iterations, args.smoothing)
+    pretty_matplotlib_config(24)
+    figure = plt.figure(figsize=(10, 8))
+    axes = figure.add_subplot(111)
 
-    plt.legend()
-    plt.title(args.environment_name.capitalize())
+    single_plot(axes, METHODS, base_directory, args.environment_name, args.num_iterations, args.smoothing)
     plt.xlabel('Million frames')
     plt.ylabel('Evaluation episode return')
-
+    plt.legend()
 
     if args.pdf:
         plt.savefig(base_directory / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
