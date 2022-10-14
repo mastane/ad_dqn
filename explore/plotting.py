@@ -67,6 +67,9 @@ def single_plot(axes, methods, base_dir, environment_name, num_iterations, smoot
 
         axes.plot(frames, mean_score, label=NAMES_MAP[method])
         axes.fill_between(frames, min_score, max_score, alpha=0.2)
+    axes.grid()
+
+
 
     axes.set_title(environment_name.capitalize())
 

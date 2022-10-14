@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from argparse import ArgumentParser
@@ -6,7 +7,7 @@ from matplotlib import pyplot as plt
 
 sys.path.append('.')
 from explore.merge_csv import merge_csv
-from explore.plotting import single_plot, METHODS
+from explore.plotting import single_plot, METHODS, pretty_matplotlib_config
 
 
 
@@ -39,7 +40,9 @@ def main():
     print(df)
 
     fig, axes = plt.subplots(2, 3, figsize=(14, 8), sharex=True)
-    # fig.tight_layout(rect=(0.025, 0, 1, 1))
+    pretty_matplotlib_config(16)
+    fig.tight_layout(rect=(0.05, 0.05, 0.95, 0.93))
+    # fig.tight_layout()
     print(axes.shape)
     print(axes)
 
@@ -56,14 +59,16 @@ def main():
 
     # handles, labels = ax.get_legend_handles_label()
     handles, labels = plt.gca().get_legend_handles_labels()
-    fig.legend(handles, labels, loc='lower center', ncols=6)
+    fig.legend(handles, labels, loc='upper center', ncols=6)
 
     # plt.xlabel('Million frames')
     # plt.ylabel('Evaluation episode return')
     # plt.legend()
+    fig_path = result_directory / 'figures' / args.result_note
+    if not os.path.exists(fig_path):
+        os.makedirs(fig_path)
+    plt.savefig( fig_path / f'{args.method}.pdf', dpi=120)
     plt.show()
-
-
 
 
 
