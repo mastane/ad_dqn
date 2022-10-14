@@ -10,15 +10,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
 
-METHODS = ['dqn', 'double_q', 'qrdqn', 'maddqn']
+METHODS = ['dqn', 'double_q', 'qrdqn', 'c51', 'caddqn']
 
-names_map = {
+NAMES_MAP = {
     'dqn': "DQN",
     'double_q': 'Double DQN',
     'qrdqn': 'QR DQN',
     'addqn': 'SAD DQN',
     'saddqn': 'SAD DQN',
-    'maddqn': 'MAD DQN'
+    'maddqn': 'MAD DQN',
+    'c51': 'c51',
+    'caddqn': 'CAD DQN',
 }
 
 
@@ -33,7 +35,7 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument('--num_iterations', type=int, default=50)
     parser.add_argument('--environment_name', type=str, default='alien')
-    parser.add_argument('--result_directory', type=str, default='logs')
+    parser.add_argument('--base_directory', type=str, default='logs')
     parser.add_argument('--smoothing', type=int, default=0)
     parser.add_argument('--note', type=str, default='')
     parser.add_argument('--pdf', default=False, action='store_true')
@@ -41,17 +43,13 @@ def parse_args():
     return args
 
 
-def main():
-    args = parse_args()
-    print(args)
-    base_dir = Path(args.result_directory)
 
-    plt.figure(figsize=(10, 8))
+def single_plot(methods, base_dir, environment_name, num_iterations, smoothing):
     pretty_matplotlib_config(24)
-    for method in METHODS:
+    for method in methods:
         df = pd.read_csv(base_dir / f'{method}.csv')
-        df = df[df.environment_name == args.environment_name]
-        df = df[df.frame < args.num_iterations*1e6]
+        df = df[df.environment_name == environment_name]
+        df = df[df.frame < (num_iterations+1)*1e6]
 
         grouped = df.groupby('frame')
         frames = grouped.frame.mean() / 1e6
@@ -59,23 +57,28 @@ def main():
         min_score = grouped['eval_episode_return'].min()
         max_score = grouped['eval_episode_return'].max()
 
-        if args.smoothing != 0:
-            mean_score = mean_score.rolling(args.smoothing).mean()
-            min_score = min_score.rolling(args.smoothing).mean()
-            max_score = max_score.rolling(args.smoothing).mean()
+        if smoothing != 0:
+            mean_score = mean_score.rolling(smoothing).mean()
+            min_score = min_score.rolling(smoothing).mean()
+            max_score = max_score.rolling(smoothing).mean()
 
-        plt.plot(frames, mean_score, label=names_map[method])
+        plt.plot(frames, mean_score, label=NAMES_MAP[method])
         plt.fill_between(frames, min_score, max_score, alpha=0.2)
 
-    # for name in breakout_0.5_0.1_25at.csv"
-    # for num in [25, 50]:
-    #     df = pd.read_csv(f'logs/breakout_0.5_0.0001_{num}at.csv')
-    #     grouped = df.groupby('frame')
-    #     mean_score = grouped['eval_episode_return'].mean()
-    #
-    #     if args.smoothing != 0:
-    #         mean_score = mean_score.rolling(args.smoothing).mean()
-    #     plt.plot(df.frame / 1e6, mean_score, label=f'maddqn_{num}at')
+    plt.legend()
+    plt.title(environment_name.capitalize())
+    plt.xlabel('Million frames')
+    plt.ylabel('Evaluation episode return')
+
+
+def main():
+    args = parse_args()
+    print(args)
+    base_directory = Path(args.base_directory)
+
+    plt.figure(figsize=(10, 8))
+    single_plot(METHODS, base_directory, args.environment_name, args.num_iterations, args.smoothing)
+
     plt.legend()
     plt.title(args.environment_name.capitalize())
     plt.xlabel('Million frames')
@@ -83,9 +86,9 @@ def main():
 
 
     if args.pdf:
-        plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
+        plt.savefig(base_directory / 'figures' / f'{args.environment_name}_{args.note}.pdf', dpi=120)
     else:
-        plt.savefig(base_dir / 'figures' / f'{args.environment_name}_{args.note}.png', dpi=120)
+        plt.savefig(base_directory / 'figures' / f'{args.environment_name}_{args.note}.png', dpi=120)
     plt.show()
 
 
