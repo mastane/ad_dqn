@@ -285,7 +285,7 @@ def cad_q_learning(
       labels=categ_target, logits=logit_qa_tm1)
 
 
-
+  """
   num_avars = dist_qa_tm1.shape[-1]
   # take argsort on atoms, then reorder atoms and probabilities
   probas = jax.nn.softmax(qa_logits_target_tm1)
@@ -316,6 +316,27 @@ def cad_q_learning(
                                  grad_error_bound)
   a_losses = l2_loss(td_errors)
   a_losses = jnp.mean(a_losses, axis=-1)
+  """
+
+  # Compute target, do not backpropagate into it.
+  target_tm1 = jax.lax.select(stop_target_gradients,
+                               jax.lax.stop_gradient(target_tm1), target_tm1)
+
+  idx_sort = jnp.searchsorted(q_atoms_tm1, target_tm1)  # find index such that adding target will keep atoms sorted
+  probas = jax.nn.softmax(qa_logits_target_tm1)
+  cumprobas = jnp.cumsum(probas) - probas
+  cumprobas = jnp.append(cumprobas, 1.0)
+  cdf_target = cumprobas[idx_sort]
+  # find which AVaR to update
+  num_avars = dist_qa_tm1.shape[-1]
+  segments = jnp.arange( 1, num_avars ) / jnp.float32( num_avars )  # avar integration segments
+  idx_avar = jnp.digitize(cdf_target, segments)
+
+  td_errors = target_tm1 - dist_qa_tm1[idx_avar]
+  td_errors = clip_gradient(td_errors, -grad_error_bound,
+                                 grad_error_bound)
+  a_losses = l2_loss(td_errors)
+  #a_losses = jnp.mean(a_losses, axis=-1)
 
   """
   losses = jnp.mean(losses, axis=-1)
@@ -379,10 +400,10 @@ class CadDqn(parts.Agent):
       _, online_key, target_key = jax.random.split(rng_key, 3)
       dist_q_tm1 = network.apply(online_params, online_key,
                                  transitions.s_tm1).q_dist
-      #dist_q_target_t = network.apply(target_params, target_key,
-      #                              transitions.s_t).q_dist
-      dist_q_target_t = network.apply(online_params, online_key,  # use online net as target
-                                      transitions.s_t).q_dist
+      dist_q_target_t = network.apply(target_params, target_key,
+                                    transitions.s_t).q_dist
+      #dist_q_target_t = network.apply(online_params, online_key,  # use online net as target
+        #                              transitions.s_t).q_dist
       logits_q_tm1 = network.apply(online_params, online_key,
                                    transitions.s_tm1).q_logits
       logits_target_q_tm1 = network.apply(target_params, target_key,
