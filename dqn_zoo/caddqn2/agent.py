@@ -319,6 +319,7 @@ def cad_q_learning(
   """
 
   # Compute target, do not backpropagate into it.
+  target_tm1 = jnp.squeeze(target_tm1)
   target_tm1 = jax.lax.select(stop_target_gradients,
                                jax.lax.stop_gradient(target_tm1), target_tm1)
 
