@@ -333,10 +333,18 @@ def cad_q_learning(
   segments = jnp.arange( 1, num_avars ) / jnp.float32( num_avars )  # avar integration segments
   idx_avar = jnp.digitize(cdf_target, segments)
 
+  target_tm1 = jnp.float32( num_avars ) * target_tm1  # IMPORTANCE SAMPLING REWEIGHTING
   td_errors = target_tm1 - dist_qa_tm1[idx_avar]
   td_errors = clip_gradient(td_errors, -grad_error_bound,
                                  grad_error_bound)
-  a_losses = l2_loss(td_errors)
+  # IS target = 0 for other atoms
+  zero_hot = jnp.ones_like( dist_qa_tm1 )
+  zero_hot[idx_avar] = 0.0
+  IS_errors = zero_hot * dist_qa_tm1
+  IS_errors = clip_gradient(IS_errors, -grad_error_bound,
+                                 grad_error_bound)
+  a_losses = l2_loss(td_errors) + jnp.sum( l2_loss( IS_errors ) , axis=-1 )
+  a_losses = a_losses / jnp.float32( num_avars )
   #a_losses = jnp.mean(a_losses, axis=-1)
 
   """
