@@ -43,7 +43,7 @@ from dqn_zoo import networks
 from dqn_zoo import parts
 from dqn_zoo import processors
 from dqn_zoo import replay as replay_lib
-from dqn_zoo.caddqn2 import agent
+from dqn_zoo.caddqn_IS import agent
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS

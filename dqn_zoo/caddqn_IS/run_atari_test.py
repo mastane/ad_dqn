@@ -20,7 +20,7 @@ from absl import flags
 from absl.testing import flagsaver
 from jax.config import config
 
-from dqn_zoo.caddqn2 import run_atari
+from dqn_zoo.caddqn_IS import run_atari
 from absl.testing import absltest
 
 FLAGS = flags.FLAGS
