@@ -415,7 +415,7 @@ class CadDqn(parts.Agent):
         #                              transitions.s_t).q_dist
       logits_q_tm1 = network.apply(online_params, online_key,
                                    transitions.s_tm1).q_logits
-      logits_target_q_t = network.apply(target_params, target_key,
+      logits_q_t = network.apply(target_params, target_key,
                                         transitions.s_t).q_logits
       losses = _batch_cad_q_learning(
           dist_q_tm1,
@@ -427,7 +427,7 @@ class CadDqn(parts.Agent):
           dist_q_target_t,  # No double Q-learning here.
           dist_q_target_t,
           support,
-          logits_target_q_t,
+          logits_q_t,
           self._grad_error_bound
       )
       chex.assert_shape(losses, (self._batch_size,))
