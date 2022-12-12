@@ -230,7 +230,7 @@ def cad_q_learning(
     dist_q_t_selector: Array,
     dist_q_t: Array,
     q_atoms_target_tm1: Array,
-    q_logits_target_tm1: Array,
+    q_logits_t: Array,
     grad_error_bound: Numeric,
     stop_target_gradients: bool = True,
 ) -> Numeric:
@@ -255,10 +255,10 @@ def cad_q_learning(
     CAD-Q-learning temporal difference error.
   """
   chex.assert_rank([
-      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_target_tm1
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_t
   ], [2, 1, 2, 0, 0, 0, 2, 2, 1, 2])
   chex.assert_type([
-      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_target_tm1
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_t
   ], [float, float, float, int, float, float, float, float, float, float])
 
   # Only update the taken actions.
@@ -415,8 +415,8 @@ class CadDqn(parts.Agent):
         #                              transitions.s_t).q_dist
       logits_q_tm1 = network.apply(online_params, online_key,
                                    transitions.s_tm1).q_logits
-      logits_target_q_tm1 = network.apply(target_params, target_key,
-                                        transitions.s_tm1).q_logits
+      logits_target_q_t = network.apply(target_params, target_key,
+                                        transitions.s_t).q_logits
       losses = _batch_cad_q_learning(
           dist_q_tm1,
           support,
@@ -427,7 +427,7 @@ class CadDqn(parts.Agent):
           dist_q_target_t,  # No double Q-learning here.
           dist_q_target_t,
           support,
-          logits_target_q_tm1,
+          logits_target_q_t,
           self._grad_error_bound
       )
       chex.assert_shape(losses, (self._batch_size,))
