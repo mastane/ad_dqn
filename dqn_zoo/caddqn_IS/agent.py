@@ -229,7 +229,7 @@ def cad_q_learning(
     discount_t: Numeric,
     dist_q_t_selector: Array,
     dist_q_t: Array,
-    q_atoms_target_tm1: Array,
+    q_atoms_t: Array,
     q_logits_t: Array,
     grad_error_bound: Numeric,
     stop_target_gradients: bool = True,
@@ -255,24 +255,40 @@ def cad_q_learning(
     CAD-Q-learning temporal difference error.
   """
   chex.assert_rank([
-      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_t
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_t, q_logits_t
   ], [2, 1, 2, 0, 0, 0, 2, 2, 1, 2])
   chex.assert_type([
-      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_target_tm1, q_logits_t
+      dist_q_tm1, q_atoms_tm1, q_logits_tm1, a_tm1, r_t, discount_t, dist_q_t_selector, dist_q_t, q_atoms_t, q_logits_t
   ], [float, float, float, int, float, float, float, float, float, float])
 
   # Only update the taken actions.
   dist_qa_tm1 = dist_q_tm1[:, a_tm1]
   #qa_logits_target_tm1 = q_logits_target_tm1[:, a_tm1]
-  qa_logits_target_tm1 = q_logits_tm1[a_tm1]  # use online net as target
+  qa_logits_tm1 = q_logits_tm1[a_tm1]
 
   # Select target action according to greedy policy w.r.t. dist_q_t_selector.
   q_t_selector = jnp.mean(dist_q_t_selector, axis=0)
   a_t = jnp.argmax(q_t_selector)
   dist_qa_t = dist_q_t[:, a_t]
 
-  # ADDED BY MASTANE
-  target_tm1 = r_t + discount_t * jnp.mean(dist_qa_t, keepdims=True)
+
+
+
+
+
+
+  # Convert logits to distribution, then find greedy action in state s_t.
+  q_t_probs = jax.nn.softmax(q_logits_t)
+  q_t_mean = jnp.sum(q_t_probs * q_atoms_t[jnp.newaxis, :], axis=1, keepdims=True)
+  pi_t = jnp.argmax(q_t_mean)
+
+  #target_tm1 = r_t + discount_t * jnp.mean(dist_qa_t, keepdims=True)
+  target_tm1 = r_t + discount_t * q_t_mean[pi_t]
+
+
+
+
+
 
   # Project using the Cramer distance and maybe stop gradient flow to targets.
   categ_target = categorical_l2_project(target_tm1, jnp.array([1.0]), q_atoms_tm1)
@@ -324,7 +340,7 @@ def cad_q_learning(
                                jax.lax.stop_gradient(target_tm1), target_tm1)
 
   idx_sort = jnp.searchsorted(q_atoms_tm1, target_tm1)  # find index such that adding target will keep atoms sorted
-  probas = jax.nn.softmax(qa_logits_target_tm1)
+  probas = jax.nn.softmax(qa_logits_tm1)
   cumprobas = jnp.cumsum(probas) - probas
   cumprobas = jnp.append(cumprobas, 1.0)
   cdf_target = cumprobas[idx_sort]
