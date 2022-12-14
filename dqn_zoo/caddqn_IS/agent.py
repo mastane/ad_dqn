@@ -355,7 +355,7 @@ def cad_q_learning(
                                  grad_error_bound)
   # IS target = 0 for other atoms
   zero_hot = jnp.ones_like( dist_qa_tm1 )
-  zero_hot[idx_avar] = 0.0
+  zero_hot = zero_hot.at[idx_avar].set(0.0)
   IS_errors = zero_hot * dist_qa_tm1
   IS_errors = clip_gradient(IS_errors, -grad_error_bound,
                                  grad_error_bound)
