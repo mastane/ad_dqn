@@ -284,6 +284,10 @@ def cad_q_learning(
 
   #target_tm1 = r_t + discount_t * jnp.mean(dist_qa_t, keepdims=True)
   target_tm1 = r_t + discount_t * q_t_mean[pi_t]
+  # importance sampling on target
+  num_avars = dist_qa_tm1.shape[-1]
+  target_tm1_IS = jnp.float32( num_avars ) * jnp.append(target_tm1, 0.0)
+  probas_IS = jnp.array( [ 1.0 / jnp.float32( num_avars ), ( jnp.float32( num_avars ) - 1.0 ) / jnp.float32( num_avars ) ] )
 
 
 
@@ -291,7 +295,7 @@ def cad_q_learning(
 
 
   # Project using the Cramer distance and maybe stop gradient flow to targets.
-  categ_target = categorical_l2_project(target_tm1, jnp.array([1.0]), q_atoms_tm1)
+  categ_target = categorical_l2_project( target_tm1_IS, probas_IS, q_atoms_tm1)
   categ_target = jax.lax.select(stop_target_gradients, jax.lax.stop_gradient(categ_target),
                           categ_target)
 
@@ -345,7 +349,7 @@ def cad_q_learning(
   cumprobas = jnp.append(cumprobas, 1.0)
   cdf_target = cumprobas[idx_sort]
   # find which AVaR to update
-  num_avars = dist_qa_tm1.shape[-1]
+  #num_avars = dist_qa_tm1.shape[-1]
   segments = jnp.arange( 1, num_avars ) / jnp.float32( num_avars )  # avar integration segments
   idx_avar = jnp.digitize(cdf_target, segments)
 
